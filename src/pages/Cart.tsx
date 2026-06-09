@@ -2,7 +2,6 @@ import { useNavigate } from "react-router-dom";
 import { useAppData } from "../context/AppContext";
 import { useState } from "react";
 import type { ICart, IMenuItem, IRestaurant } from "../types";
-import axios from "axios";
 import { restaurantService } from "../main";
 import toast from "react-hot-toast";
 import { VscLoading } from "react-icons/vsc";
@@ -10,7 +9,7 @@ import { BiMinus, BiPlus } from "react-icons/bi";
 import { TbTrash } from "react-icons/tb";
 
 const Cart = () => {
-  const { cart, subTotal, quauntity, fetchCart, formatCurrency } = useAppData();
+  const { cart, subTotal, quauntity, formatCurrency, incItem, decItem, clearCartLocal } = useAppData();
   const navigate = useNavigate();
 
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
@@ -35,17 +34,7 @@ const Cart = () => {
   const increaseQty = async (itemId: string) => {
     try {
       setLoadingItemId(itemId);
-      await axios.put(
-        `${restaurantService}/api/cart/inc`,
-        { itemId },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-
-      await fetchCart();
+      await incItem(itemId);
     } catch (error) {
       toast.error("something went wrong");
     } finally {
@@ -56,17 +45,7 @@ const Cart = () => {
   const decreaseQty = async (itemId: string) => {
     try {
       setLoadingItemId(itemId);
-      await axios.put(
-        `${restaurantService}/api/cart/dec`,
-        { itemId },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      );
-
-      await fetchCart();
+      await decItem(itemId);
     } catch (error) {
       toast.error("something went wrong");
     } finally {
@@ -79,13 +58,7 @@ const Cart = () => {
     if (!confirm) return;
     try {
       setClearingCart(true);
-      await axios.delete(`${restaurantService}/api/cart/clear`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
-
-      await fetchCart();
+      await clearCartLocal();
     } catch (error) {
       toast.error("something went wrong");
     } finally {

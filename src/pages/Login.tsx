@@ -119,7 +119,13 @@ const AuthPage = () => {
         setUser(result.data.user);
         if (setIsAuth) setIsAuth(true);
 
-        handleRoleRouting(result.data.user);
+        const redirect = localStorage.getItem("postLoginRedirect");
+        if (redirect) {
+          localStorage.removeItem("postLoginRedirect");
+          navigate(redirect, { replace: true });
+        } else {
+          handleRoleRouting(result.data.user);
+        }
       }
     } catch (error: any) {
       console.error(error);
@@ -147,7 +153,13 @@ const AuthPage = () => {
       }
 
       toast.success(result.data.message || "Logged in with Google!");
-      handleRoleRouting(fullUser);
+      const redirect = localStorage.getItem("postLoginRedirect");
+      if (redirect) {
+        localStorage.removeItem("postLoginRedirect");
+        navigate(redirect, { replace: true });
+      } else {
+        handleRoleRouting(fullUser);
+      }
     } catch (error) {
       console.error(error);
       toast.error("Problem while logging in with Google");

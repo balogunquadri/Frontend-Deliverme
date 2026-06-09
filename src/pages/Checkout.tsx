@@ -15,7 +15,7 @@ interface Address {
 }
 
 const Checkout = () => {
-  const { cart, subTotal, quauntity, currencyCode, formatCurrency } = useAppData();
+  const { cart, subTotal, quauntity, currencyCode, formatCurrency, isAuth, user } = useAppData();
 
   const [addresses, setAddresses] = useState<Address[]>([]);
 
@@ -28,6 +28,9 @@ const Checkout = () => {
   const [loadingRazorpay, setLoadingRazorpay] = useState(false);
   const [loadingStripe, setLoadingStripe] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
+
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountAmount, setDiscountAmount] = useState(0);
 
   useEffect(() => {
     const fetchAddresses = async () => {
@@ -55,6 +58,18 @@ const Checkout = () => {
     };
 
     fetchAddresses();
+    // restore pending order if any (post-login flow)
+    try {
+      const pendingRaw = localStorage.getItem("pendingOrder");
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw);
+        if (pending.selectedAddressId) setselectedAddressId(pending.selectedAddressId);
+        if (pending.discountCode) setDiscountCode(pending.discountCode);
+        localStorage.removeItem("pendingOrder");
+      }
+    } catch (err) {
+      // ignore
+    }
   }, [cart]);
 
   const navigate = useNavigate();
@@ -75,8 +90,57 @@ const Checkout = () => {
 
   const grandTotal = subTotal + deliveryFee + platformFee;
 
+  const isFirstTimer = () => {
+    try {
+      if (user) {
+        const key = `hasOrderedBefore_${user._id}`;
+        return !localStorage.getItem(key);
+      }
+      return !localStorage.getItem("hasOrderedBefore_guest");
+    } catch (err) {
+      return true;
+    }
+  };
+
+  const applyDiscounts = (baseDeliveryFee: number) => {
+    let d = 0;
+    if (discountCode.trim() === "") return { fee: baseDeliveryFee, discount: 0 };
+
+    try {
+      const stored = localStorage.getItem("discountCodes");
+      if (stored) {
+        const codes = JSON.parse(stored) as any[];
+        const found = codes.find((c) => c.code === discountCode);
+        if (found) {
+          if (found.type === "freeDelivery") {
+            if (isFirstTimer()) {
+              d = baseDeliveryFee;
+            }
+          } else if (found.type === "percentage") {
+            d = Math.round((found.value / 100) * (subTotal + baseDeliveryFee + platformFee));
+          } else if (found.type === "fixed") {
+            d = found.value;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+
+    return { fee: Math.max(0, baseDeliveryFee - d), discount: d };
+  };
+
   const createOrder = async (paymentMethod: "razorpay" | "stripe") => {
     if (!selectedAddressId) return null;
+
+    // If user is not authenticated, save pending order and redirect to login
+    if (!isAuth) {
+      const pending = { cart, selectedAddressId, discountCode };
+      localStorage.setItem("pendingOrder", JSON.stringify(pending));
+      localStorage.setItem("postLoginRedirect", "/checkout");
+      navigate(`/login`);
+      return null;
+    }
 
     setCreatingOrder(true);
     try {
@@ -86,6 +150,7 @@ const Checkout = () => {
           paymentMethod,
           addressId: selectedAddressId,
           localCurrency: currencyCode,
+          discountCode: discountCode || undefined,
         },
         {
           headers: {
@@ -93,6 +158,15 @@ const Checkout = () => {
           },
         }
       );
+
+      // If FreeDelivery used, mark user as having ordered for future checks
+      if (discountCode === "FreeDelivery") {
+        if (user) {
+          localStorage.setItem(`hasOrderedBefore_${user._id}`, "true");
+        } else {
+          localStorage.setItem("hasOrderedBefore_guest", "true");
+        }
+      }
 
       return data;
     } catch (error) {
@@ -277,6 +351,31 @@ const Checkout = () => {
           <span>Grand Total</span>
           <span>{formatCurrency(grandTotal)}</span>
         </div>
+      </div>
+
+      <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
+        <h3 className="font-semibold">Discount / Promo Code</h3>
+        <div className="flex gap-2">
+          <input
+            value={discountCode}
+            onChange={(e) => setDiscountCode(e.target.value)}
+            className="flex-1 rounded border p-2"
+            placeholder='Enter promo (e.g. "FreeDelivery")'
+          />
+          <button
+            onClick={() => {
+              const res = applyDiscounts(deliveryFee);
+              setDiscountAmount(res.discount);
+              toast.success("Discount applied");
+            }}
+            className="rounded bg-gray-800 px-4 py-2 text-white"
+          >
+            Apply
+          </button>
+        </div>
+        {discountAmount > 0 && (
+          <p className="text-sm text-green-600">Discount applied: {formatCurrency(discountAmount)}</p>
+        )}
       </div>
 
       <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">

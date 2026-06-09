@@ -47,14 +47,17 @@ const App = () => {
 
         {/* 🛡️ 3. Secure Internal Application Infrastructure */}
         <Route path="/courier" element={<Courier />} />
+        
+        {/* 🛒 Guest-Accessible Cart, Checkout & Restaurant (for guest cart flows) */}
+        <Route path="/restaurant/:id" element={<RestaurantPage />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/checkout" element={<Checkout />} />
+
         <Route element={<ProtectedRoute />}>
           {/* Role Choice Lockroom (Accessible ONLY when user.role is null) */}
           <Route path="/select-role" element={<SelectRole />} />
 
           {/* 🍔 Customer Specific Modules */}
-          <Route path="/restaurant/:id" element={<RestaurantPage />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={<Checkout />} />
           <Route path="/address" element={<AddAddressPage />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/order/:id" element={<OrderPage />} />

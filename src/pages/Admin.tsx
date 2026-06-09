@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { adminService } from "../main";
 import AdminRestaurantCard from "../components/AdminRestaurantCard";
 import RiderAdmin from "../components/RiderAdmin";
+import DiscountManager from "../components/DiscountManager";
 
 const Admin = () => {
   const [restaurant, setRestaurant] = useState<any[]>([]);
@@ -84,6 +85,10 @@ const Admin = () => {
         >
           Riders ({riders.length})
         </button>
+      </div>
+
+      <div className="mt-4">
+        <DiscountManager />
       </div>
 
       {tab === "restaurant" && (

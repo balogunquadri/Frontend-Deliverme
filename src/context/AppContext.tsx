@@ -11,7 +11,15 @@ import type { AppContextType, ICart, LocationData, User } from "../types";
 import { getCurrencyConfig, formatCurrency as formatCurrencyValue } from "../utils/currency";
 import { Toaster } from "react-hot-toast";
 
-type AppContextValue = AppContextType & { logout: () => void };
+type AppContextValue =
+  AppContextType &
+  {
+    logout: () => void;
+    addToCart: (restaurantId: string, itemId: string, itemObj?: any) => Promise<void>;
+    incItem: (itemId: string) => Promise<void>;
+    decItem: (itemId: string) => Promise<void>;
+    clearCartLocal: () => Promise<void>;
+  };
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 interface AppProviderProps {
@@ -94,6 +102,175 @@ export const AppProvider = ({ children }: AppProviderProps) => {
       console.error("Error syncing cart data:", error);
     }
   }
+
+  // Guest/local cart handling
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("guestCart");
+      if (stored) {
+        const parsed = JSON.parse(stored) as ICart[];
+        if (parsed && parsed.length > 0) {
+          setCart(parsed);
+          let subtotal = 0;
+          let cartLength = 0;
+          for (const ci of parsed) {
+            const item: any = ci.itemId;
+            subtotal += item.price * ci.quauntity;
+            cartLength += ci.quauntity;
+          }
+          setSubTotal(subtotal);
+          setQuauntity(cartLength);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load guest cart", err);
+    }
+  }, []);
+
+  const saveGuestCart = (newCart: ICart[]) => {
+    setCart(newCart);
+    try {
+      localStorage.setItem("guestCart", JSON.stringify(newCart));
+    } catch (err) {
+      console.warn("Failed saving guest cart", err);
+    }
+
+    let subtotal = 0;
+    let cartLength = 0;
+    for (const ci of newCart) {
+      const item: any = ci.itemId;
+      subtotal += item.price * ci.quauntity;
+      cartLength += ci.quauntity;
+    }
+    setSubTotal(subtotal);
+    setQuauntity(cartLength);
+  };
+
+  const addToCartLocalOrRemote = async (restaurantId: string, itemId: string, itemObj?: any) => {
+    // If authenticated customer, add via API
+    if (user && user.role === "customer") {
+      try {
+        await axios.post(`${restaurantService}/api/cart/add`, { restaurantId, itemId }, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+        });
+        await fetchCart();
+        return;
+      } catch (err) {
+        console.warn("Failed to add remote cart item", err);
+      }
+    }
+
+    // Local guest cart
+    const existing = cart.find((c) => (c.itemId as any)._id === itemId || c.itemId === itemId);
+    let newCart = [...cart];
+    if (existing) {
+      newCart = newCart.map((c) => {
+        if ((c.itemId as any)._id === itemId || c.itemId === itemId) {
+          return { ...c, quauntity: c.quauntity + 1 };
+        }
+        return c;
+      });
+    } else {
+      newCart.push({
+        _id: `${Date.now()}-${itemId}`,
+        userId: "",
+        restaurantId,
+        itemId: itemObj || itemId,
+        quauntity: 1,
+        cretedAt: new Date(),
+        updatedAt: new Date(),
+      } as ICart);
+    }
+
+    saveGuestCart(newCart);
+  };
+
+  const incLocalOrRemote = async (itemId: string) => {
+    if (user && user.role === "customer") {
+      try {
+        await axios.put(`${restaurantService}/api/cart/inc`, { itemId }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+        await fetchCart();
+        return;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    const newCart = cart.map((c) => {
+      if ((c.itemId as any)._id === itemId || c.itemId === itemId) {
+        return { ...c, quauntity: c.quauntity + 1 };
+      }
+      return c;
+    });
+
+    saveGuestCart(newCart);
+  };
+
+  const decLocalOrRemote = async (itemId: string) => {
+    if (user && user.role === "customer") {
+      try {
+        await axios.put(`${restaurantService}/api/cart/dec`, { itemId }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+        await fetchCart();
+        return;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    let newCart = cart.map((c) => {
+      if ((c.itemId as any)._id === itemId || c.itemId === itemId) {
+        return { ...c, quauntity: c.quauntity - 1 };
+      }
+      return c;
+    }).filter((c) => c.quauntity > 0);
+
+    saveGuestCart(newCart);
+  };
+
+  const clearLocalOrRemote = async () => {
+    if (user && user.role === "customer") {
+      try {
+        await axios.delete(`${restaurantService}/api/cart/clear`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+        await fetchCart();
+        return;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    localStorage.removeItem("guestCart");
+    setCart([]);
+    setSubTotal(0);
+    setQuauntity(0);
+  };
+
+  // When a user logs in, try to migrate any guest cart to server
+  useEffect(() => {
+    const tryMigrate = async () => {
+      if (user && user.role === "customer") {
+        const stored = localStorage.getItem("guestCart");
+        if (!stored) return;
+        try {
+          const parsed = JSON.parse(stored) as ICart[];
+          for (const ci of parsed) {
+            const itemId = (ci.itemId as any)._id || ci.itemId;
+            const restaurantId = ci.restaurantId as any._id || ci.restaurantId;
+            try {
+              await axios.post(`${restaurantService}/api/cart/add`, { restaurantId, itemId }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+            } catch (err) {
+              console.warn("Failed migrating item", itemId, err);
+            }
+          }
+          localStorage.removeItem("guestCart");
+          await fetchCart();
+        } catch (err) {
+          console.warn("Failed migrating guest cart", err);
+        }
+      }
+    };
+
+    tryMigrate();
+  }, [user]);
 
   const logout = () => {
     localStorage.removeItem("token"); 
@@ -195,6 +372,10 @@ export const AppProvider = ({ children }: AppProviderProps) => {
         quauntity,
         subTotal,
         logout,
+        addToCart: addToCartLocalOrRemote,
+        incItem: incLocalOrRemote,
+        decItem: decLocalOrRemote,
+        clearCartLocal: clearLocalOrRemote,
         currencyCode,
         currencySymbol,
         currencyLocale,
