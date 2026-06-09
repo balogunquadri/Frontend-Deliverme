@@ -6,6 +6,13 @@ import axios from "axios";
 import { restaurantService } from "../main";
 import RestaurantCard from "../components/RestaurantCard";
 
+type SuggestedLocation = {
+  displayName: string;
+  lat: number | null;
+  lng: number | null;
+  count?: number;
+};
+
 const Home = () => {
   const { location } = useAppData();
   const [searchParams] = useSearchParams();
@@ -13,6 +20,7 @@ const Home = () => {
   const search = searchParams.get("search") || "";
 
   const [restaurants, setRestaurants] = useState<IRestaurant[]>([]);
+  const [suggestedLocations, setSuggestedLocations] = useState<SuggestedLocation[]>([]);
   const [loading, setLoading] = useState(true);
 
   const getDistanceKm = (
@@ -43,6 +51,7 @@ const Home = () => {
 
     try {
       setLoading(true);
+      setSuggestedLocations([]);
 
       const { data } = await axios.get(
         `${restaurantService}/api/restaurant/all`,
@@ -59,8 +68,46 @@ const Home = () => {
       );
 
       setRestaurants(data.restaurants ?? []);
-    } catch (error) {
+    } catch (error: any) {
       console.log(error);
+      setRestaurants([]);
+
+      if (error.response?.status === 404) {
+        const data = error.response.data || {};
+        if (Array.isArray(data.suggestedLocations)) {
+          setSuggestedLocations(data.suggestedLocations);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchAtCoordinates = async (lat: number, lng: number) => {
+    try {
+      setLoading(true);
+      setSuggestedLocations([]);
+
+      const { data } = await axios.get(`${restaurantService}/api/restaurant/all`, {
+        params: {
+          latitude: lat,
+          longitude: lng,
+          search,
+        },
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      setRestaurants(data.restaurants ?? []);
+    } catch (error: any) {
+      setRestaurants([]);
+      if (error.response?.status === 404) {
+        const data = error.response.data || {};
+        if (Array.isArray(data.suggestedLocations)) {
+          setSuggestedLocations(data.suggestedLocations);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -104,7 +151,44 @@ const Home = () => {
           })}
         </div>
       ) : (
-        <p className="text-center text-gray-500">No restaurant found</p>
+        <div className="space-y-6 text-center">
+          <p className="text-lg font-semibold text-gray-700">
+            No restaurants were found in your area.
+          </p>
+          <p className="text-sm text-gray-500">
+            Try one of these nearby suggested areas instead.
+          </p>
+
+          {suggestedLocations.length > 0 ? (
+            <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2">
+              {suggestedLocations.map((location, index) => (
+                <button
+                  key={`${location.displayName}-${index}`}
+                  type="button"
+                  className="rounded-lg border border-gray-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
+                  onClick={() => {
+                    if (location.lat && location.lng) {
+                      searchAtCoordinates(location.lat, location.lng);
+                    }
+                  }}
+                >
+                  <div className="text-sm font-semibold text-gray-900">
+                    {location.displayName}
+                  </div>
+                  {location.count != null ? (
+                    <div className="mt-1 text-xs text-gray-500">
+                      {location.count} restaurants
+                    </div>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              We couldn&apos;t find suggestions at the moment. Try another search or refresh the page.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
