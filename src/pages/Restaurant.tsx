@@ -12,7 +12,6 @@ type SellerTab = "menu" | "add-item" | "sales";
 
 const Restaurant = () => {
   const [restaurant, setRestaurant] = useState<IRestaurant | null>(null);
-  const [restaurants, setRestaurants] = useState<IRestaurant[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<SellerTab>("menu");
@@ -32,7 +31,6 @@ const Restaurant = () => {
       const fetchedRestaurants: IRestaurant[] =
         data.restaurants || (data.restaurant ? [data.restaurant] : []);
 
-      setRestaurants(fetchedRestaurants || []);
       setRestaurant(fetchedRestaurants && fetchedRestaurants.length > 0 ? fetchedRestaurants[0] : null);
 
       if (data.token) {
