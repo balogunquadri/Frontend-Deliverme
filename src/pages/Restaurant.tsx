@@ -12,6 +12,8 @@ type SellerTab = "menu" | "add-item" | "sales";
 
 const Restaurant = () => {
   const [restaurant, setRestaurant] = useState<IRestaurant | null>(null);
+  const [restaurants, setRestaurants] = useState<IRestaurant[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<SellerTab>("menu");
 
@@ -26,7 +28,12 @@ const Restaurant = () => {
         }
       );
 
-      setRestaurant(data.restaurant || null);
+      // Support both old single-restaurant and new multiple-restaurant responses
+      const fetchedRestaurants: IRestaurant[] =
+        data.restaurants || (data.restaurant ? [data.restaurant] : []);
+
+      setRestaurants(fetchedRestaurants || []);
+      setRestaurant(fetchedRestaurants && fetchedRestaurants.length > 0 ? fetchedRestaurants[0] : null);
 
       if (data.token) {
         localStorage.setItem("token", data.token);
@@ -76,15 +83,37 @@ const Restaurant = () => {
     );
 
   if (!restaurant) {
+    // No restaurants yet — show add form
     return <AddRestaurant fetchMyRestaurant={fetchMyRestaurant} />;
   }
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6 space-y-6">
-      <RestaurantProfile
-        restaurant={restaurant}
-        onUpdate={setRestaurant}
-        isSeller={true}
-      />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <RestaurantProfile
+            restaurant={restaurant}
+            onUpdate={setRestaurant}
+            isSeller={true}
+          />
+        </div>
+        <div>
+          <button
+            className="px-4 py-2 rounded-lg bg-green-600 text-white"
+            onClick={() => setShowAdd(true)}
+          >
+            Add Another Restaurant
+          </button>
+        </div>
+      </div>
+
+      {showAdd && (
+        <div className="mt-4">
+          <AddRestaurant fetchMyRestaurant={async () => {
+            await fetchMyRestaurant();
+            setShowAdd(false);
+          }} />
+        </div>
+      )}
 
       <RestaurantOrders restaurantId={restaurant._id} />
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import { useAppData } from "../context/AppContext";
 import { useSocket } from "../context/SocketContext";
 import axios from "axios";
@@ -185,8 +186,57 @@ const RiderDashboard = () => {
   const [image, setImage] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [useManualLocation, setUseManualLocation] = useState(false);
+  const [addressSearch, setAddressSearch] = useState("");
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [formattedAddress, setFormattedAddress] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+
+  useEffect(() => {
+    if (addressSearch.length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            addressSearch
+          )}&limit=5`
+        );
+        const data = await res.json();
+        setAddressSuggestions(data || []);
+      } catch (error) {
+        console.error("Address search error:", error);
+      }
+    }, 400);
+
+    return () => clearTimeout(timeout);
+  }, [addressSearch]);
+
+  const handleAddressSelect = (locationData: any) => {
+    setFormattedAddress(locationData.display_name);
+    setAddressSearch(locationData.display_name);
+    setLatitude(locationData.lat);
+    setLongitude(locationData.lon);
+    setAddressSuggestions([]);
+  };
+
+  const geocodeAddress = async (query: string) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          query
+        )}&limit=1`
+      );
+      const data = await res.json();
+      return data && data[0] ? data[0] : null;
+    } catch (error) {
+      console.error("Geocode error:", error);
+      return null;
+    }
+  };
 
   const handleSubmit = async () => {
     if (!useManualLocation && !navigator.geolocation) {
@@ -195,8 +245,31 @@ const RiderDashboard = () => {
     }
 
     if (useManualLocation) {
-      if (!latitude || !longitude) {
-        toast.error("Please enter latitude and longitude");
+      if (!formattedAddress && !addressSearch) {
+        toast.error("Please enter an address");
+        return;
+      }
+
+      let lat = latitude;
+      let lon = longitude;
+      let address = formattedAddress || addressSearch;
+
+      if ((!lat || !lon) && address) {
+        const geocode = await geocodeAddress(address);
+        if (!geocode) {
+          toast.error("Unable to resolve address. Please select one of the suggestions.");
+          return;
+        }
+        lat = geocode.lat;
+        lon = geocode.lon;
+        address = geocode.display_name;
+        setFormattedAddress(geocode.display_name);
+        setLatitude(geocode.lat);
+        setLongitude(geocode.lon);
+      }
+
+      if (!lat || !lon) {
+        toast.error("Please select a valid address from suggestions.");
         return;
       }
 
@@ -204,8 +277,9 @@ const RiderDashboard = () => {
       formData.append("phoneNumber", phoneNumber);
       formData.append("aadharNumber", aadharNumber);
       formData.append("drivingLicenseNumber", drivingLicenseNumber);
-      formData.append("latitude", latitude);
-      formData.append("longitude", longitude);
+      formData.append("latitude", lat);
+      formData.append("longitude", lon);
+      formData.append("formattedAddress", address);
 
       if (image) {
         formData.append("file", image);
@@ -290,7 +364,7 @@ const RiderDashboard = () => {
           <h1 className="text-xl font-semibold">Add Your Profile</h1>
           <input
             type="number"
-            placeholder="Aadhar number"
+            placeholder="Passport number"
             value={aadharNumber}
             onChange={(e) => setaadharNumber(e.target.value)}
             className="w-full rounded-lg border px-4 py-2 text-sm outline-none"
@@ -329,6 +403,9 @@ const RiderDashboard = () => {
                 type="button"
                 onClick={() => {
                   setUseManualLocation(!useManualLocation);
+                  setAddressSearch("");
+                  setAddressSuggestions([]);
+                  setFormattedAddress("");
                   setLatitude("");
                   setLongitude("");
                 }}
@@ -340,21 +417,68 @@ const RiderDashboard = () => {
             {useManualLocation ? (
               <div className="space-y-2">
                 <input
-                  type="number"
-                  placeholder="Latitude"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
+                  type="text"
+                  placeholder="Enter address"
+                  value={addressSearch}
+                  onChange={(e) => {
+                    setAddressSearch(e.target.value);
+                    setFormattedAddress("");
+                    setLatitude("");
+                    setLongitude("");
+                  }}
                   className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                  step="0.0001"
                 />
-                <input
-                  type="number"
-                  placeholder="Longitude"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                  className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-                  step="0.0001"
-                />
+                {addressSuggestions.length > 0 && (
+                  <ul className="max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+                    {addressSuggestions.map((item) => (
+                      <li key={item.place_id}>
+                        <button
+                          type="button"
+                          onClick={() => handleAddressSelect(item)}
+                          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          {item.display_name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {formattedAddress && (
+                  <div className="space-y-2">
+                    <div className="rounded-lg border bg-slate-50 p-3 text-sm text-gray-700">
+                      <div className="font-medium">Selected address</div>
+                      <div>{formattedAddress}</div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border bg-slate-50 p-3 text-sm text-gray-700">
+                        <div className="font-medium">Latitude</div>
+                        <div>{latitude}</div>
+                      </div>
+                      <div className="rounded-lg border bg-slate-50 p-3 text-sm text-gray-700">
+                        <div className="font-medium">Longitude</div>
+                        <div>{longitude}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {latitude && longitude && (
+                  <div className="h-64 rounded-xl overflow-hidden border border-gray-200">
+                    <MapContainer
+                      center={[parseFloat(latitude), parseFloat(longitude)]}
+                      zoom={14}
+                      scrollWheelZoom={false}
+                      className="h-full w-full"
+                    >
+                      <TileLayer
+                        attribution="&copy; OpenStreetMap contributors"
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      <Marker position={[parseFloat(latitude), parseFloat(longitude)]}>
+                        <Popup>{formattedAddress}</Popup>
+                      </Marker>
+                    </MapContainer>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-xs text-gray-500">Location will be auto-detected when you submit</p>
