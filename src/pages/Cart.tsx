@@ -2,7 +2,6 @@ import { useNavigate } from "react-router-dom";
 import { useAppData } from "../context/AppContext";
 import { useState } from "react";
 import type { ICart, IMenuItem, IRestaurant } from "../types";
-import { restaurantService } from "../main";
 import toast from "react-hot-toast";
 import { VscLoading } from "react-icons/vsc";
 import { BiMinus, BiPlus } from "react-icons/bi";

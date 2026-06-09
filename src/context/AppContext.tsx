@@ -254,7 +254,7 @@ export const AppProvider = ({ children }: AppProviderProps) => {
           const parsed = JSON.parse(stored) as ICart[];
           for (const ci of parsed) {
             const itemId = (ci.itemId as any)._id || ci.itemId;
-            const restaurantId = ci.restaurantId as any._id || ci.restaurantId;
+            const restaurantId = (ci.restaurantId as any)._id || ci.restaurantId;
             try {
               await axios.post(`${restaurantService}/api/cart/add`, { restaurantId, itemId }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
             } catch (err) {

@@ -11,7 +11,6 @@ type Discount = {
 
 export default function DiscountManager() {
   const [codes, setCodes] = useState<Discount[]>([]);
-  const [editing, setEditing] = useState<Discount | null>(null);
 
   useEffect(() => {
     try {
