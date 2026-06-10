@@ -288,10 +288,16 @@ export const AppProvider = ({ children }: AppProviderProps) => {
 
   // Sync cart only when a user successfully achieves a verified 'customer' status
   useEffect(() => {
+    // If a logged-in customer, sync server cart. If `user` is explicitly
+    // non-null and not a customer, clear the cart. Do NOT clear on
+    // initial mount when `user` is still `null` — this preserves guest carts.
     if (user && user.role === "customer") {
       fetchCart();
+    } else if (user === null) {
+      // initial mount or unauthenticated state; keep any guest cart intact
+      return;
     } else {
-      // Clear cart items if role changes away from customer (e.g., vendor switches profile)
+      // user is present but not a customer: clear cart
       setCart([]);
       setSubTotal(0);
       setQuauntity(0);

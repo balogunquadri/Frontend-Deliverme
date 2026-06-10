@@ -24,6 +24,15 @@ const Cart = () => {
 
   const restaurant = cart[0].restaurantId as IRestaurant;
 
+  // Safety: if restaurant is just a string ID (guest cart), show error
+  if (!restaurant || typeof restaurant === "string") {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <p className="text-gray-500 text-lg">Invalid restaurant data. Please reload the page.</p>
+      </div>
+    );
+  }
+
   const deliveryFee = subTotal < 250 ? 49 : 0;
 
   const platfromFee = 7;
@@ -73,7 +82,7 @@ const Cart = () => {
       <div className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="text-xl font-semibold">{restaurant.name}</h2>
         <p className="text-sm text-gray-500">
-          {restaurant.autoLocation.formattedAddress}
+          {restaurant.autoLocation?.formattedAddress || "Location unavailable"}
         </p>
       </div>
 
