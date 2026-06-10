@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import type { IMenuItem, IRestaurant } from "../types";
 import axios from "axios";
 import { restaurantService } from "../main";
 import RestaurantProfile from "../components/RestaurantProfile";
 import MenuItems from "../components/MenuItems";
+import { useAppData } from "../context/AppContext";
 
 const RestaurantPage = () => {
   const { id } = useParams();
@@ -15,12 +16,11 @@ const RestaurantPage = () => {
 
   const fetchRestaurant = async () => {
     try {
+      const token = localStorage.getItem("token");
       const { data } = await axios.get(
         `${restaurantService}/api/restaurant/${id}`,
         {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         }
       );
 
@@ -34,12 +34,11 @@ const RestaurantPage = () => {
 
   const fetchMenuItems = async () => {
     try {
+      const token = localStorage.getItem("token");
       const { data } = await axios.get(
         `${restaurantService}/api/item/all/${id}`,
         {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         }
       );
 
@@ -71,6 +70,8 @@ const RestaurantPage = () => {
       </div>
     );
   }
+  const { cart } = useAppData();
+
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6 space-y-6">
       <RestaurantProfile
@@ -85,6 +86,24 @@ const RestaurantPage = () => {
           items={menuItems}
           onItemDeleted={() => {}}
         />
+
+        {cart && cart.length > 0 && (
+          <div className="mt-4 flex justify-end gap-3">
+            <Link
+              to="/cart"
+              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              View Cart ({cart.length})
+            </Link>
+
+            <Link
+              to="/checkout"
+              className="inline-flex items-center rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700"
+            >
+              Checkout
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

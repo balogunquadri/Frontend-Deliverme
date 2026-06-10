@@ -8,6 +8,7 @@ import axios from "axios";
 import { restaurantService } from "../main";
 import toast from "react-hot-toast";
 import { useAppData } from "../context/AppContext";
+import { Link } from "react-router-dom";
 
 interface MenuItemsProps {
   items: IMenuItem[];
@@ -57,7 +58,7 @@ const MenuItems = ({ items, onItemDeleted, isSeller }: MenuItemsProps) => {
     }
   };
 
-  const { formatCurrency, addToCart } = useAppData();
+  const { formatCurrency, addToCart, cart } = useAppData();
 
   const handleAdd = async (restaurantId: string, itemId: string, itemObj: IMenuItem) => {
     try {
@@ -134,21 +135,32 @@ const MenuItems = ({ items, onItemDeleted, isSeller }: MenuItemsProps) => {
                 )}
 
                 {!isSeller && (
-                  <button
-                    disabled={!item.isAvailable || isLoading}
-                    onClick={() => handleAdd(item.restaurantId, item._id, item)}
-                    className={`flex items-center justify-center rounded-lg p-2 ${
-                      !item.isAvailable || isLoading
-                        ? "cursor-not-allowed text-gray-400"
-                        : "text-blue-500 hover:bg-blue-50"
-                    }`}
-                  >
-                    {isLoading ? (
-                      <VscLoading size={18} className="animate-spin" />
-                    ) : (
-                      <BsCartPlus size={18} />
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={!item.isAvailable || isLoading}
+                      onClick={() => handleAdd(item.restaurantId, item._id, item)}
+                      className={`flex items-center justify-center rounded-lg p-2 ${
+                        !item.isAvailable || isLoading
+                          ? "cursor-not-allowed text-gray-400"
+                          : "text-blue-500 hover:bg-blue-50"
+                      }`}
+                    >
+                      {isLoading ? (
+                        <VscLoading size={18} className="animate-spin" />
+                      ) : (
+                        <BsCartPlus size={18} />
+                      )}
+                    </button>
+
+                    {cart && cart.length > 0 && (
+                      <Link
+                        to="/checkout"
+                        className="inline-flex items-center rounded-lg bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                      >
+                        Checkout
+                      </Link>
                     )}
-                  </button>
+                  </div>
                 )}
               </div>
             </div>

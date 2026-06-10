@@ -53,6 +53,7 @@ const Home = () => {
       setLoading(true);
       setSuggestedLocations([]);
 
+      const token = localStorage.getItem("token");
       const { data } = await axios.get(
         `${restaurantService}/api/restaurant/all`,
         {
@@ -61,9 +62,7 @@ const Home = () => {
             longitude: location.longitude,
             search,
           },
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         }
       );
 
@@ -88,15 +87,14 @@ const Home = () => {
       setLoading(true);
       setSuggestedLocations([]);
 
+      const token = localStorage.getItem("token");
       const { data } = await axios.get(`${restaurantService}/api/restaurant/all`, {
         params: {
           latitude: lat,
           longitude: lng,
           search,
         },
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
       setRestaurants(data.restaurants ?? []);
