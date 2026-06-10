@@ -18,16 +18,13 @@ const Checkout = () => {
   const { cart, subTotal, quauntity, currencyCode, formatCurrency, isAuth, user } = useAppData();
 
   const [addresses, setAddresses] = useState<Address[]>([]);
-
-  const [selectedAddressId, setselectedAddressId] = useState<string | null>(
-    null
-  );
-
+  const [selectedAddressId, setselectedAddressId] = useState<string | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(true);
-
   const [loadingRazorpay, setLoadingRazorpay] = useState(false);
   const [loadingStripe, setLoadingStripe] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [restaurant, setRestaurant] = useState<IRestaurant | null>(null);
+  const [fetchingRestaurant, setFetchingRestaurant] = useState(false);
 
   const [discountCode, setDiscountCode] = useState("");
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -72,6 +69,40 @@ const Checkout = () => {
     }
   }, [cart]);
 
+  // Fetch restaurant data if we only have an ID
+  useEffect(() => {
+    if (!cart || cart.length === 0) return;
+
+    const restaurantData = cart[0].restaurantId;
+
+    // If it's already a full object, use it
+    if (restaurantData && typeof restaurantData === "object") {
+      setRestaurant(restaurantData as IRestaurant);
+      return;
+    }
+
+    // If it's just an ID string, fetch the restaurant
+    if (restaurantData && typeof restaurantData === "string") {
+      setFetchingRestaurant(true);
+      axios
+        .get(`${restaurantService}/api/restaurant/${restaurantData}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        })
+        .then(({ data }) => {
+          setRestaurant(data);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch restaurant:", err);
+          toast.error("Could not load restaurant details");
+        })
+        .finally(() => {
+          setFetchingRestaurant(false);
+        });
+    }
+  }, [cart]);
+
   const navigate = useNavigate();
 
   if (!cart || cart.length === 0) {
@@ -82,13 +113,10 @@ const Checkout = () => {
     );
   }
 
-  const restaurant = cart[0].restaurantId as IRestaurant;
-
-  // Safety: if restaurant is just a string ID (guest cart), show error
-  if (!restaurant || typeof restaurant === "string") {
+  if (fetchingRestaurant || !restaurant) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-gray-500 text-lg">Invalid restaurant data. Please reload the page.</p>
+        <p className="text-gray-500 text-lg">Loading checkout...</p>
       </div>
     );
   }
