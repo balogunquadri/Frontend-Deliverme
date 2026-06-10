@@ -95,10 +95,12 @@ const LocateMeButton = ({
 const AddAddressPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const fromCheckout = useMemo(
-    () => new URLSearchParams(location.search).get("source") === "checkout",
-    [location.search]
-  );
+  const fromCheckout = useMemo(() => {
+    const urlSearch = new URLSearchParams(location.search);
+    const sourceIsCheckout = urlSearch.get("source") === "checkout";
+    const hasPendingOrder = Boolean(localStorage.getItem("pendingOrder"));
+    return sourceIsCheckout || hasPendingOrder;
+  }, [location.search]);
 
   const defaultAddressStorageKey = "defaultAddressId";
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -479,7 +481,7 @@ const AddAddressPage = () => {
           </div>
         )}
 
-        {fromCheckout && addresses.length > 0 && (
+        {fromCheckout && (
           <button
             type="button"
             onClick={() => {

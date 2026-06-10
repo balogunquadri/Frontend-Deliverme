@@ -128,6 +128,7 @@ const Checkout = () => {
         return;
       }
 
+      setLoadingAddress(true);
       try {
         const { data } = await axios.get(
           `${restaurantService}/api/address/all`,
@@ -169,10 +170,16 @@ const Checkout = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuth && !loadingAddress && addresses.length === 0) {
+    if (
+      isAuth &&
+      !loadingAddress &&
+      addresses.length === 0 &&
+      cart &&
+      cart.length > 0
+    ) {
       navigate("/address?source=checkout");
     }
-  }, [addresses.length, isAuth, loadingAddress, navigate]);
+  }, [addresses.length, cart, isAuth, loadingAddress, navigate]);
 
   // Fetch restaurant data if we only have an ID
   useEffect(() => {
@@ -265,8 +272,10 @@ const Checkout = () => {
       }
 
       return data;
-    } catch (error) {
-      toast.error("Failed to create Order");
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || error.message || "Failed to create Order";
+      console.error("Order creation error:", error);
+      toast.error(errorMsg);
     } finally {
       setCreatingOrder(false);
     }
