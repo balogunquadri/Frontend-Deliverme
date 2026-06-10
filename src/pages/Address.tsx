@@ -100,6 +100,13 @@ const AddAddressPage = () => {
     [location.search]
   );
 
+  const defaultAddressStorageKey = "defaultAddressId";
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const selectAddress = (id: string) => {
+    setSelectedAddressId(id);
+    localStorage.setItem(defaultAddressStorageKey, id);
+  };
+
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -209,16 +216,19 @@ const AddAddressPage = () => {
   };
 
   // 📡 Fetch user's saved addresses
-  const fetchAddresses = async () => {
+  const fetchAddresses = async (): Promise<Address[]> => {
     try {
       const { data } = await axios.get(`${restaurantService}/api/address/all`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       });
-      setAddresses(data || []);
+      const addressList = data || [];
+      setAddresses(addressList);
+      return addressList;
     } catch {
       toast.error("Failed to load your saved addresses");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -227,6 +237,16 @@ const AddAddressPage = () => {
   useEffect(() => {
     fetchAddresses();
   }, []);
+
+  useEffect(() => {
+    if (!fromCheckout || selectedAddressId || addresses.length === 0) return;
+
+    const storedId = localStorage.getItem(defaultAddressStorageKey);
+    const matched = storedId ? addresses.find((addr) => addr._id === storedId) : null;
+    const defaultId = matched?._id ?? addresses[0]._id;
+
+    selectAddress(defaultId);
+  }, [addresses, fromCheckout, selectedAddressId]);
 
   // ➕ Save Address
   const addAddress = async () => {
@@ -256,10 +276,23 @@ const AddAddressPage = () => {
       setSearchQuery("");
       setLatitude(null);
       setLongitude(null);
-      await fetchAddresses();
 
-      if (fromCheckout) {
-        navigate("/checkout", { replace: true });
+      const addressList = await fetchAddresses();
+      const chosenId =
+        selectedAddressId ||
+        localStorage.getItem(defaultAddressStorageKey) ||
+        addressList[0]?._id ||
+        null;
+
+      if (chosenId) {
+        selectAddress(chosenId);
+        if (fromCheckout) {
+          localStorage.setItem(
+            "pendingOrder",
+            JSON.stringify({ selectedAddressId: chosenId })
+          );
+          navigate("/checkout", { replace: true });
+        }
       }
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to save address");
@@ -397,41 +430,70 @@ const AddAddressPage = () => {
           </div>
         ) : (
           <div className="grid gap-3">
-            {addresses.map((addr) => (
-              <div
-                key={addr._id}
-                className="flex items-center justify-between rounded-lg border bg-white p-4 shadow-sm hover:shadow transition"
-              >
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-gray-800">
-                    {addr.formattedAddress}
-                  </p>
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    <span>📞</span> {addr.mobile}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => deleteAddress(addr._id)}
-                  disabled={deletingId === addr._id}
-                  className="rounded-lg p-2 text-red-500 hover:bg-red-50 disabled:opacity-50 transition ml-4"
-                  title="Delete address"
+            {addresses.map((addr) => {
+              const isSelected = addr._id === selectedAddressId;
+              return (
+                <div
+                  key={addr._id}
+                  onClick={() => selectAddress(addr._id)}
+                  className={`flex items-center justify-between rounded-lg border p-4 shadow-sm transition cursor-pointer ${
+                    isSelected
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 bg-white hover:shadow"
+                  }`}
                 >
-                  {deletingId === addr._id ? (
-                    <BiLoader size={18} className="animate-spin" />
-                  ) : (
-                    <BiTrash size={18} />
-                  )}
-                </button>
-              </div>
-            ))}
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-gray-800">
+                      {addr.formattedAddress}
+                    </p>
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <span>📞</span> {addr.mobile}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {isSelected && (
+                      <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">
+                        Selected
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        deleteAddress(addr._id);
+                      }}
+                      disabled={deletingId === addr._id}
+                      className="rounded-lg p-2 text-red-500 hover:bg-red-50 disabled:opacity-50 transition"
+                      title="Delete address"
+                    >
+                      {deletingId === addr._id ? (
+                        <BiLoader size={18} className="animate-spin" />
+                      ) : (
+                        <BiTrash size={18} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
         {fromCheckout && addresses.length > 0 && (
           <button
             type="button"
-            onClick={() => navigate("/checkout")}
+            onClick={() => {
+              if (!selectedAddressId) {
+                toast.error("Please select an address before continuing.");
+                return;
+              }
+              localStorage.setItem(
+                "pendingOrder",
+                JSON.stringify({ selectedAddressId })
+              );
+              localStorage.setItem(defaultAddressStorageKey, selectedAddressId);
+              navigate("/checkout");
+            }}
             className="w-full rounded-lg bg-[#373ae2] px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition"
           >
             Continue to Checkout

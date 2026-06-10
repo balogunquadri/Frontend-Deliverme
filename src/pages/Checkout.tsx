@@ -372,13 +372,19 @@ const Checkout = () => {
           </p>
           <div className="mt-3 flex flex-wrap gap-3">
             <button
-              onClick={() => navigate("/login")}
+              onClick={() => {
+                localStorage.setItem("postLoginRedirect", "/checkout");
+                navigate("/login");
+              }}
               className="rounded-lg bg-[#373ae2] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
               Login
             </button>
             <button
-              onClick={() => navigate("/login", { state: { authMode: "signup" } })}
+              onClick={() => {
+                localStorage.setItem("postLoginRedirect", "/checkout");
+                navigate("/login", { state: { authMode: "signup" } });
+              }}
               className="rounded-lg border border-[#373ae2] bg-white px-4 py-2 text-sm font-semibold text-[#373ae2] hover:bg-blue-50"
             >
               Sign Up
