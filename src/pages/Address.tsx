@@ -143,11 +143,23 @@ const AddAddressPage = () => {
 
       setSearching(true);
       try {
+        // Create AbortController with 10-second timeout
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
             searchQuery
-          )}&limit=5`
+          )}&limit=5`,
+          { signal: controller.signal }
         );
+
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
         const data = await res.json();
         setSuggestions(data);
 
@@ -155,8 +167,13 @@ const AddAddressPage = () => {
         if (data.length === 0) {
           toast.error("No locations found matching that text");
         }
-      } catch {
-        toast.error("Address search service is temporarily unavailable");
+      } catch (err: any) {
+        if (err.name === "AbortError") {
+          toast.error("Address search timed out. Please try again.");
+        } else {
+          console.warn("Address search error:", err);
+          toast.error("Address search service is temporarily unavailable");
+        }
       } finally {
         setSearching(false);
       }
