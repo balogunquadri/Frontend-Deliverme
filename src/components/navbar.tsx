@@ -87,13 +87,13 @@ const Navbar = () => {
               </>
             ) : (
               <>
-                <Link to="/Home" className="font-medium text-[#373ae2]">
+                <Link to="/home" className="font-medium text-[#373ae2]">
                   Restaurants
                 </Link>
                 <Link to="/courier" className="font-medium text-[#373ae2]">
                   Courier
                 </Link>
-                <Link to="/Login" className="font-medium text-[#373ae2]">
+                <Link to="/login" className="font-medium text-[#373ae2]">
                   Login
                 </Link>
               </>

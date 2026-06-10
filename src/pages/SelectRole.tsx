@@ -42,7 +42,7 @@ const SelectRole = () => {
       } else if (role === "admin") {
         navigate("/dashboard/admin", { replace: true });
       } else {
-        navigate("/Home", { replace: true }); 
+        navigate("/home", { replace: true }); 
       }
       
     } catch (error) {

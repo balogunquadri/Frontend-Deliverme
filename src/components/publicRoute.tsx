@@ -19,7 +19,7 @@ const PublicRoute = () => {
     if (user.role === "admin") return <Navigate to="/dashboard/admin" replace />;
     
     // Default Customer panel Fallback
-    return <Navigate to="/Home" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   // If they aren't logged in, let them access the Login / Signup forms

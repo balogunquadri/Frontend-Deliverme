@@ -83,7 +83,7 @@ const AuthPage = () => {
     } else if (userObj.role === "admin") {
       navigate("/dashboard/admin", { replace: true });
     } else {
-      navigate("/Home", { replace: true });
+      navigate("/home", { replace: true });
     }
   };
 

@@ -26,13 +26,11 @@ const ProtectedRoute = () => {
     if (user.role === "seller") return <Navigate to="/dashboard/seller" replace />;
     if (user.role === "rider") return <Navigate to="/dashboard/rider" replace />;
     if (user.role === "admin") return <Navigate to="/dashboard/admin" replace />;
-    return <Navigate to="/Home" replace />;
+    return <Navigate to="/home" replace />;
   }
 
-  // 🛡️ BONUS SECURITY: Cross-portal protection
-  // Stops a customer from trying to type merchant dashboard links manually in the address bar
   if (user?.role === "customer" && location.pathname.startsWith("/dashboard")) {
-    return <Navigate to="/Home" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   // 3. Let them through safely to the requested route

@@ -5,7 +5,8 @@ import {
   useMapEvents,
   useMap,
 } from "react-leaflet";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { restaurantService } from "../main";
@@ -92,6 +93,13 @@ const LocateMeButton = ({
 };
 
 const AddAddressPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fromCheckout = useMemo(
+    () => new URLSearchParams(location.search).get("source") === "checkout",
+    [location.search]
+  );
+
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -248,7 +256,11 @@ const AddAddressPage = () => {
       setSearchQuery("");
       setLatitude(null);
       setLongitude(null);
-      fetchAddresses();
+      await fetchAddresses();
+
+      if (fromCheckout) {
+        navigate("/checkout", { replace: true });
+      }
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to save address");
     } finally {
@@ -375,7 +387,14 @@ const AddAddressPage = () => {
             <BiLoader className="animate-spin" /> Loading addresses...
           </div>
         ) : addresses.length === 0 ? (
-          <p className="text-sm text-gray-500">No addresses saved yet.</p>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-500">No addresses saved yet.</p>
+            {fromCheckout && (
+              <p className="text-sm text-yellow-700">
+                Add your first delivery address to continue to checkout.
+              </p>
+            )}
+          </div>
         ) : (
           <div className="grid gap-3">
             {addresses.map((addr) => (
@@ -407,6 +426,16 @@ const AddAddressPage = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {fromCheckout && addresses.length > 0 && (
+          <button
+            type="button"
+            onClick={() => navigate("/checkout")}
+            className="w-full rounded-lg bg-[#373ae2] px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition"
+          >
+            Continue to Checkout
+          </button>
         )}
       </div>
     </div>

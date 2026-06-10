@@ -10,7 +10,7 @@ import { BiMinus, BiPlus } from "react-icons/bi";
 import { TbTrash } from "react-icons/tb";
 
 const Cart = () => {
-  const { cart, subTotal, quauntity, formatCurrency, incItem, decItem, clearCartLocal } = useAppData();
+  const { cart, subTotal, quauntity, formatCurrency, incItem, decItem, clearCartLocal, isAuth } = useAppData();
   const navigate = useNavigate();
 
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
@@ -68,11 +68,8 @@ const Cart = () => {
     );
   }
 
-  const deliveryFee = subTotal < 250 ? 49 : 0;
-
   const platfromFee = 7;
-
-  const grandTotal = subTotal + deliveryFee + platfromFee;
+  const estimatedTotal = subTotal + platfromFee;
 
   const increaseQty = async (itemId: string) => {
     try {
@@ -97,7 +94,7 @@ const Cart = () => {
   };
 
   const clearCart = async () => {
-    const confirm = window.confirm("Are you sure you want to clear you cart?");
+    const confirm = window.confirm("Are you sure you want to clear your cart?");
     if (!confirm) return;
     try {
       setClearingCart(true);
@@ -110,7 +107,13 @@ const Cart = () => {
   };
 
   const checkout = () => {
-    navigate("/checkout");
+    if (!isAuth) {
+      localStorage.setItem("postLoginRedirect", "/address?source=checkout");
+      navigate("/login");
+      return;
+    }
+
+    navigate("/address?source=checkout");
   };
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 space-y-6">
@@ -188,22 +191,20 @@ const Cart = () => {
         </div>
         <div className="flex justify-between text-sm">
           <span>Delivery Fee</span>
-          <span>{deliveryFee === 0 ? "Free" : formatCurrency(deliveryFee)}</span>
+          <span className="text-gray-500">Calculated at checkout</span>
         </div>
         <div className="flex justify-between text-sm">
           <span>PlatFrom fee</span>
           <span>{formatCurrency(platfromFee)}</span>
         </div>
 
-        {subTotal < 250 && (
-          <p className="text-xs text-gray-500">
-            Add Item worth {formatCurrency(250 - subTotal)} more to get Free delivery
-          </p>
-        )}
+        <p className="text-xs text-gray-500">
+          Delivery fee is calculated at checkout based on the selected delivery address.
+        </p>
 
         <div className="flex justify-between text-base font-semibold border-t pt-2">
-          <span>Grand Total</span>
-          <span>{formatCurrency(grandTotal)}</span>
+          <span>Estimated Total</span>
+          <span>{formatCurrency(estimatedTotal)}</span>
         </div>
 
         <button

@@ -17,6 +17,16 @@ export interface LocationData {
   countryCode?: string;
 }
 
+export interface AddressData {
+  _id: string;
+  formattedAddress: string;
+  mobile: number;
+  location: {
+    type: "Point";
+    coordinates: [number, number];
+  };
+}
+
 export interface AppContextType {
   user: User | null;
   loading: boolean;

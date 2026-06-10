@@ -1,18 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppData } from "../context/AppContext";
 import axios from "axios";
 import { restaurantService, utilsService } from "../main";
 import { useNavigate } from "react-router-dom";
-import type { ICart, IMenuItem, IRestaurant } from "../types";
+import type { ICart, IMenuItem, IRestaurant, AddressData } from "../types";
 import toast from "react-hot-toast";
 import { BiCreditCard, BiLoader } from "react-icons/bi";
 import { loadStripe } from "@stripe/stripe-js";
 
-interface Address {
-  _id: string;
-  formattedAddress: string;
-  mobile: number;
-}
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
+interface Address extends AddressData {}
 
 const Checkout = () => {
   const { cart, subTotal, quauntity, currencyCode, formatCurrency, isAuth, user } = useAppData();
@@ -27,11 +25,105 @@ const Checkout = () => {
   const [fetchingRestaurant, setFetchingRestaurant] = useState(false);
 
   const [discountCode, setDiscountCode] = useState("");
-  const [discountAmount, setDiscountAmount] = useState(0);
+
+  const getDistanceKm = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return +(R * c).toFixed(2);
+  };
+
+  const getDistanceBasedDeliveryFee = (distanceKm: number) => {
+    if (subTotal >= 250) return 0;
+    const baseFee = 25;
+    const distanceFee = Math.round(distanceKm * 8);
+    return Math.max(baseFee, distanceFee);
+  };
+
+  const selectedAddress = useMemo(
+    () => addresses.find((address) => address._id === selectedAddressId) ?? null,
+    [addresses, selectedAddressId]
+  );
+
+  const deliveryDistance = useMemo(() => {
+    if (!selectedAddress || !restaurant?.autoLocation?.coordinates) return null;
+    const [restaurantLng, restaurantLat] = restaurant.autoLocation.coordinates;
+    const [addressLng, addressLat] = selectedAddress.location.coordinates;
+    return getDistanceKm(restaurantLat, restaurantLng, addressLat, addressLng);
+  }, [selectedAddress, restaurant]);
+
+  const baseDeliveryFee = useMemo(() => {
+    if (deliveryDistance === null) {
+      return subTotal < 250 ? 49 : 0;
+    }
+    return getDistanceBasedDeliveryFee(deliveryDistance);
+  }, [deliveryDistance, subTotal]);
+
+  const applyDiscounts = (
+    baseDeliveryFee: number,
+    baseTotal: number
+  ) => {
+    let discount = 0;
+    let deliveryFeeAfterDiscount = baseDeliveryFee;
+
+    if (discountCode.trim() === "") {
+      return { fee: deliveryFeeAfterDiscount, discount };
+    }
+
+    try {
+      const stored = localStorage.getItem("discountCodes");
+      if (stored) {
+        const codes = JSON.parse(stored) as any[];
+        const found = codes.find((c) => c.code === discountCode);
+        if (found) {
+          if (found.type === "freeDelivery") {
+            discount = baseDeliveryFee;
+            deliveryFeeAfterDiscount = 0;
+          } else if (found.type === "percentage") {
+            discount = Math.round((found.value / 100) * baseTotal);
+          } else if (found.type === "fixed") {
+            discount = found.value;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+
+    const cappedDiscount = Math.min(discount, baseTotal);
+    return {
+      fee: deliveryFeeAfterDiscount,
+      discount: Math.max(0, cappedDiscount),
+    };
+  };
+
+  const selectedDeliveryResult = useMemo(() => {
+    const baseTotal = subTotal + baseDeliveryFee + 7;
+    return applyDiscounts(baseDeliveryFee, baseTotal);
+  }, [baseDeliveryFee, discountCode, subTotal]);
+
+  const totalAfterDiscount = Math.max(
+    0,
+    subTotal + selectedDeliveryResult.fee + 7 - selectedDeliveryResult.discount
+  );
 
   useEffect(() => {
     const fetchAddresses = async () => {
-      if (!cart || cart.length === 0) {
+      if (!cart || cart.length === 0 || !isAuth) {
         setLoadingAddress(false);
         return;
       }
@@ -46,7 +138,12 @@ const Checkout = () => {
           }
         );
 
-        setAddresses(data || []);
+        const addressList = data || [];
+        setAddresses(addressList);
+
+        if (!selectedAddressId && addressList.length === 1) {
+          setselectedAddressId(addressList[0]._id);
+        }
       } catch (error) {
         console.log(error);
       } finally {
@@ -67,7 +164,15 @@ const Checkout = () => {
     } catch (err) {
       // ignore
     }
-  }, [cart]);
+  }, [cart, isAuth]);
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuth && !loadingAddress && addresses.length === 0) {
+      navigate("/address?source=checkout");
+    }
+  }, [addresses.length, isAuth, loadingAddress, navigate]);
 
   // Fetch restaurant data if we only have an ID
   useEffect(() => {
@@ -103,8 +208,6 @@ const Checkout = () => {
     }
   }, [cart]);
 
-  const navigate = useNavigate();
-
   if (!cart || cart.length === 0) {
     return (
       <div className="flex min-h-[60vh] item-center justify-center">
@@ -121,51 +224,7 @@ const Checkout = () => {
     );
   }
 
-  const deliveryFee = subTotal < 250 ? 49 : 0;
-
   const platformFee = 7;
-
-  const grandTotal = subTotal + deliveryFee + platformFee;
-
-  const isFirstTimer = () => {
-    try {
-      if (user) {
-        const key = `hasOrderedBefore_${user._id}`;
-        return !localStorage.getItem(key);
-      }
-      return !localStorage.getItem("hasOrderedBefore_guest");
-    } catch (err) {
-      return true;
-    }
-  };
-
-  const applyDiscounts = (baseDeliveryFee: number) => {
-    let d = 0;
-    if (discountCode.trim() === "") return { fee: baseDeliveryFee, discount: 0 };
-
-    try {
-      const stored = localStorage.getItem("discountCodes");
-      if (stored) {
-        const codes = JSON.parse(stored) as any[];
-        const found = codes.find((c) => c.code === discountCode);
-        if (found) {
-          if (found.type === "freeDelivery") {
-            if (isFirstTimer()) {
-              d = baseDeliveryFee;
-            }
-          } else if (found.type === "percentage") {
-            d = Math.round((found.value / 100) * (subTotal + baseDeliveryFee + platformFee));
-          } else if (found.type === "fixed") {
-            d = found.value;
-          }
-        }
-      }
-    } catch (err) {
-      console.warn(err);
-    }
-
-    return { fee: Math.max(0, baseDeliveryFee - d), discount: d };
-  };
 
   const createOrder = async (paymentMethod: "razorpay" | "stripe") => {
     if (!selectedAddressId) return null;
@@ -267,8 +326,6 @@ const Checkout = () => {
     }
   };
 
-  const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-
   const payWithStripe = async () => {
     try {
       setLoadingStripe(true);
@@ -306,6 +363,29 @@ const Checkout = () => {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
       <h1 className="text-2xl font-bold">Checkout</h1>
+
+      {!isAuth && (
+        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900 shadow-sm">
+          <p className="font-medium">Login or sign up to complete your order.</p>
+          <p className="mt-1 text-sm text-yellow-700">
+            Delivery address selection and checkout are available only after authentication.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button
+              onClick={() => navigate("/login")}
+              className="rounded-lg bg-[#373ae2] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Login
+            </button>
+            <button
+              onClick={() => navigate("/login", { state: { authMode: "signup" } })}
+              className="rounded-lg border border-[#373ae2] bg-white px-4 py-2 text-sm font-semibold text-[#373ae2] hover:bg-blue-50"
+            >
+              Sign Up
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-xl bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">{restaurant.name}</h2>
@@ -371,22 +451,39 @@ const Checkout = () => {
         </div>
         <div className="flex justify-between text-sm">
           <span>Delivery Fee</span>
-          <span>{deliveryFee === 0 ? "Free" : formatCurrency(deliveryFee)}</span>
+          <span>
+            {selectedDeliveryResult.fee === 0
+              ? "Free"
+              : formatCurrency(selectedDeliveryResult.fee)}
+          </span>
         </div>
         <div className="flex justify-between text-sm">
           <span>PlatForm Fee</span>
           <span>{formatCurrency(platformFee)}</span>
         </div>
+        {deliveryDistance !== null && (
+          <div className="flex justify-between text-sm text-gray-500">
+            <span>Delivery distance</span>
+            <span>{deliveryDistance.toFixed(2)} km</span>
+          </div>
+        )}
 
         {subTotal < 250 && (
           <p className="text-xs text-gray-500">
-            Add Item worth {formatCurrency(250 - subTotal)} more to get Free delivery
+            Add Item worth {formatCurrency(250 - subTotal)} more to get free delivery.
           </p>
+        )}
+
+        {selectedDeliveryResult.discount > 0 && (
+          <div className="flex justify-between text-sm text-green-600">
+            <span>Discount</span>
+            <span>-{formatCurrency(selectedDeliveryResult.discount)}</span>
+          </div>
         )}
 
         <div className="flex justify-between text-base font-semibold border-t pt-2">
           <span>Grand Total</span>
-          <span>{formatCurrency(grandTotal)}</span>
+          <span>{formatCurrency(totalAfterDiscount)}</span>
         </div>
       </div>
 
@@ -401,22 +498,35 @@ const Checkout = () => {
           />
           <button
             onClick={() => {
-              const res = applyDiscounts(deliveryFee);
-              setDiscountAmount(res.discount);
-              toast.success("Discount applied");
+              const res = selectedDeliveryResult;
+              if (res.discount > 0) {
+                toast.success("Discount applied");
+              } else {
+                toast.error("Invalid or ineligible promo code");
+              }
             }}
             className="rounded bg-gray-800 px-4 py-2 text-white"
           >
             Apply
           </button>
         </div>
-        {discountAmount > 0 && (
-          <p className="text-sm text-green-600">Discount applied: {formatCurrency(discountAmount)}</p>
+        {selectedDeliveryResult.discount > 0 && (
+          <p className="text-sm text-green-600">
+            Discount applied: {formatCurrency(selectedDeliveryResult.discount)}
+          </p>
         )}
       </div>
 
       <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
         <h3 className="font-semibold">Payment Method</h3>
+
+        {!selectedAddressId && !loadingAddress && (
+          <p className="text-sm text-yellow-600">
+            {addresses.length === 0
+              ? "Add a delivery address to enable payment."
+              : "Select delivery address to enable payment."}
+          </p>
+        )}
 
         <button
           disabled={!selectedAddressId || loadingRazorpay || creatingOrder}
@@ -436,7 +546,7 @@ const Checkout = () => {
           onClick={payWithStripe}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-black py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
         >
-          {loadingRazorpay ? (
+          {loadingStripe ? (
             <BiLoader size={18} className="animate-spin" />
           ) : (
             <BiCreditCard size={18} />
